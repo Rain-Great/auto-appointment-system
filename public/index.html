@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>病患看診系統</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; padding: 24px; background:#f7f9fc; }
+    h1 { font-size: 36px; margin-bottom: 8px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    label { display:block; font-size:20px; margin-top:12px; }
+    input, textarea, button, select { font-size:20px; padding:8px; width:100%; box-sizing:border-box; }
+    button { cursor:pointer; }
+    .row { display:flex; gap:12px; }
+    .col { flex:1; }
+    table { width:100%; border-collapse:collapse; margin-top:18px; }
+    th, td { text-align:left; padding:12px; border-bottom:1px solid #e1e8f0; font-size:20px; }
+    .seen { color: #999; text-decoration:line-through; }
+    .btn-seen { background: #2e8b57; color:#fff; border:none; padding:8px 12px; font-size:18px; }
+    .btn-add { background:#1e90ff; color:#fff; border:none; padding:12px; font-size:20px; margin-top:12px; }
+    .time { white-space:nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>病患看診系統</h1>
+    <form id="form">
+      <label>姓名</label>
+      <input id="name" type="text" required placeholder="輸入病患姓名" />
+
+      <label>電話</label>
+      <input id="phone" type="tel" placeholder="輸入聯絡電話" />
+
+      <label>Email</label>
+      <input id="email" type="email" placeholder="輸入電子郵件" />
+
+      <label>主訴</label>
+      <textarea id="complaint" rows="2" placeholder="輸入主訴（例如：發燒、頭痛）"></textarea>
+
+      <label>看診醫師</label>
+      <select id="doctor" required style="font-size:18px; padding:8px;"></select>
+
+      <label>看診時間</label>
+      <input id="appt_time" type="datetime-local" required />
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+        <button id="btnSlots" style="font-size:16px;padding:8px 10px;">可約時段</button>
+        <div id="slots" style="font-size:16px; margin-left:8px;"></div>
+      </div>
+
+      <button class="btn-add" type="submit">新增病患</button>
+    </form>
+
+    <div style="margin-top:28px; display:flex; gap:12px; align-items:center;">
+      <h2 style="margin:0; font-size:28px;">看診清單</h2>
+      <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <label style="font-size:18px;">選擇日期</label>
+        <input id="date" type="date" style="font-size:18px; padding:6px;" />
+        <button id="btnQuery" style="font-size:18px; padding:8px 12px;">查詢</button>
+      </div>
+    </div>
+
+    <table id="list" aria-live="polite">
+      <thead>
+        <tr><th>姓名</th><th>主訴</th><th>看診時間</th><th>狀態</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Detail modal -->
+    <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;">
+      <div style="background:#fff; padding:20px; width:90%; max-width:600px; border-radius:8px;">
+        <h3 id="m-title" style="font-size:22px; margin:0 0 12px 0;">病人資料</h3>
+        <div>
+          <label>姓名</label>
+          <input id="m-name" style="font-size:18px;" />
+          <label>主訴</label>
+          <textarea id="m-complaint" rows="3" style="font-size:18px;"></textarea>
+          <label>電話</label>
+          <input id="m-phone" style="font-size:18px;" />
+          <label>Email</label>
+          <input id="m-email" style="font-size:18px;" />
+          <label>醫師</label>
+          <select id="m-doctor" style="font-size:18px; padding:8px;"></select>
+          <label>看診時間</label>
+          <input id="m-appt" type="datetime-local" style="font-size:18px;" />
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button id="m-save" style="background:#1e90ff;color:#fff;padding:10px 14px;font-size:18px;border:none;">儲存</button>
+          <button id="m-seen" style="background:#2e8b57;color:#fff;padding:10px 14px;font-size:18px;border:none;">標記已看診</button>
+          <button id="m-close" style="margin-left:auto;padding:10px 14px;font-size:18px;">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchAppointments(date) {
+      const url = date ? `/api/appointments?date=${date}` : '/api/appointments';
+      const res = await fetch(url);
+      const data = await res.json();
+      const tbody = document.querySelector('#list tbody');
+      tbody.innerHTML = '';
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4">今日暫無預約</td></tr>';
+        return;
+      }
+      for (const p of data) {
+        const tr = document.createElement('tr');
+        tr.className = p.seen ? 'seen' : '';
+        const time = new Date(p.appt_time).toLocaleString();
+        tr.innerHTML = `
+          <td>${escapeHtml(p.name)}</td>
+              <td>${escapeHtml(p.complaint)}<div style="font-size:14px;color:#666;margin-top:6px;">${escapeHtml(p.phone||'')} ${escapeHtml(p.email||'')} <span style="margin-left:8px; font-weight:600;">${escapeHtml(p.doctor||'')}</span></div></td>
+          <td class="time">${time}</td>
+          <td>
+            ${p.seen ? '已看診' : `<button class="btn-seen" data-id="${p.id}">標記已看診</button>`}
+            <button class="btn-detail" data-id="${p.id}" style="margin-left:8px;padding:6px 8px;font-size:16px;">詳情</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+      document.querySelectorAll('.btn-seen').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          await fetch(`/api/patients/${id}/seen`, { method: 'POST' });
+          fetchToday();
+        });
+      });
+      document.querySelectorAll('.btn-detail').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          openModal(id);
+        });
+      });
+    }
+
+    function escapeHtml(s){ return (s||'').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const complaint = document.getElementById('complaint').value.trim();
+      const appt_time = document.getElementById('appt_time').value;
+      const phone = document.getElementById('phone').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const doctor = document.getElementById('doctor').value;
+      if (!name || !appt_time) return alert('請填寫姓名與看診時間');
+      // send ISO string
+      const iso = new Date(appt_time).toISOString();
+      await fetch('/api/patients', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, complaint, appt_time: iso, phone, email, doctor })
+      });
+      document.getElementById('form').reset();
+      const dateInput = document.getElementById('date').value;
+      fetchAppointments(dateInput || null);
+    });
+
+    // load doctors into select
+    async function loadDoctors(){
+      const res = await fetch('/api/doctors');
+      const docs = await res.json();
+      const sel = document.getElementById('doctor');
+      sel.innerHTML = '';
+      for (const d of docs) {
+        const opt = document.createElement('option'); opt.value = d.name; opt.textContent = d.name; sel.appendChild(opt);
+      }
+    }
+
+    document.getElementById('btnSlots').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const date = document.getElementById('date').value;
+      const doctor = document.getElementById('doctor').value;
+      if (!date || !doctor) return alert('請選擇日期與醫師');
+      const res = await fetch(`/api/available?date=${date}&doctor=${encodeURIComponent(doctor)}`);
+      const slots = await res.json();
+      const container = document.getElementById('slots');
+      container.innerHTML = '';
+      if (!slots.length) { container.textContent = '無可用時段'; return; }
+      for (const s of slots.slice(0,8)) {
+        const b = document.createElement('button');
+        b.textContent = s.time.split(' ')[1];
+        b.style.marginRight = '6px'; b.style.padding='6px 8px'; b.style.fontSize='14px';
+        b.addEventListener('click', () => {
+          // set appt_time to local datetime
+          const dt = new Date(s.iso);
+          const local = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+          document.getElementById('appt_time').value = local;
+        });
+        container.appendChild(b);
+      }
+    });
+
+    document.getElementById('btnQuery').addEventListener('click', (e) => {
+      e.preventDefault();
+      const date = document.getElementById('date').value;
+      fetchAppointments(date || null);
+    });
+
+    // Modal functions
+    let currentId = null;
+    function showModal() { document.getElementById('modal').style.display = 'flex'; }
+    function hideModal() { document.getElementById('modal').style.display = 'none'; currentId = null; }
+
+    async function openModal(id) {
+      currentId = id;
+      const res = await fetch(`/api/patients/${id}`);
+      if (!res.ok) return alert('讀取失敗');
+      const p = await res.json();
+      document.getElementById('m-name').value = p.name || '';
+      document.getElementById('m-complaint').value = p.complaint || '';
+      document.getElementById('m-phone').value = p.phone || '';
+      document.getElementById('m-email').value = p.email || '';
+      document.getElementById('m-doctor').value = p.doctor || '';
+      // convert ISO to local datetime-local value
+      const dt = new Date(p.appt_time);
+      const local = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+      document.getElementById('m-appt').value = local;
+      showModal();
+    }
+
+    document.getElementById('m-close').addEventListener('click', () => hideModal());
+    document.getElementById('m-seen').addEventListener('click', async () => {
+      if (!currentId) return;
+      await fetch(`/api/patients/${currentId}/seen`, { method: 'POST' });
+      hideModal();
+      const dateInput = document.getElementById('date').value;
+      fetchAppointments(dateInput || null);
+    });
+      document.getElementById('m-save').addEventListener('click', async () => {
+      if (!currentId) return;
+      const name = document.getElementById('m-name').value.trim();
+      const complaint = document.getElementById('m-complaint').value.trim();
+      const phone = document.getElementById('m-phone').value.trim();
+      const email = document.getElementById('m-email').value.trim();
+      const doctor = document.getElementById('m-doctor').value;
+      const appt = document.getElementById('m-appt').value;
+      if (!name || !appt) return alert('請填寫姓名與看診時間');
+      const iso = new Date(appt).toISOString();
+      await fetch(`/api/patients/${currentId}`, { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, complaint, appt_time: iso, phone, email, doctor }) });
+      hideModal();
+      const dateInput = document.getElementById('date').value;
+      fetchAppointments(dateInput || null);
+    });
+
+    // populate modal doctor select
+    async function loadModalDoctors(){
+      const res = await fetch('/api/doctors');
+      const docs = await res.json();
+      const sel = document.getElementById('m-doctor'); sel.innerHTML='';
+      for (const d of docs){ const opt=document.createElement('option'); opt.value=d.name; opt.textContent=d.name; sel.appendChild(opt); }
+    }
+    loadModalDoctors();
+
+    // initial load: set date to today and load
+    (function init(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
+      awaitLoad();
+      async function awaitLoad(){ await loadDoctors(); fetchAppointments(`${yyyy}-${mm}-${dd}`); }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            if [ ! -d ~/clinic-appoinment-sytem ]; then
+              git clone https://github.com/Rain-Great/clinic-appoinment-sytem.git ~/clinic-appoinment-sytem
+            fi
+            cd ~/clinic-appoinment-sytem
+            git pull origin main
+            npm install --omit=dev
+            mkdir -p data
+            pm2 restart clinic-appoinment-sytem || pm2 start app.js --name clinic-appoinment-sytem
+            pm2 save
