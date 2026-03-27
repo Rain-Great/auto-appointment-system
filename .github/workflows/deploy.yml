@@ -13,12 +13,12 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_KEY }}
           script: |
-            if [ ! -d ~/auto-appoinment-system ]; then
-              git clone https://github.com/Rain-Great/auto-appoinment-system.git ~/auto-appoinment-system
+            if [ ! -d ~/auto-appointment-system ]; then
+              git clone https://github.com/Rain-Great/auto-appointment-system.git ~/auto-appointment-system
             fi
-            cd ~/auto-appoinment-system
+            cd ~/auto-appointment-system
             git pull origin main
             npm install --omit=dev
             mkdir -p data
-            pm2 restart auto-appoinment-system || pm2 start app.js --name auto-appoinment-system
+            pm2 restart auto-appointment-system || pm2 start app.js --name auto-appointment-system
             pm2 save
